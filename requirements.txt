@@ -1,0 +1,13 @@
+flask==2.2.3  
+werkzeug==2.2.3  
+requests  
+numpy  
+pandas  
+flask-socketio  
+google-auth  
+google-auth-oauthlib  
+google-auth-httplib2  
+google-api-python-client  
+python-dotenv
+apscheduler
+gunicorn

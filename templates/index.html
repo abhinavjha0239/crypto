@@ -1,0 +1,248 @@
+<!DOCTYPE html>  
+<html lang="en">  
+<head>  
+    <meta charset="UTF-8">  
+    <title>Crypto Dashboard</title>  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+    
+    <!-- Tailwind CSS -->  
+    <script src="https://cdn.tailwindcss.com"></script>  
+    
+    <!-- Optional: Custom Tailwind Configuration -->  
+    <script>  
+        tailwind.config = {  
+            theme: {  
+                extend: {  
+                    colors: {  
+                        'crypto-bg': '#121212',  
+                        'crypto-card': '#1E1E1E',  
+                        'crypto-green': '#4CAF50',  
+                        'crypto-red': '#F44336',  
+                    },  
+                    animation: {  
+                        'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',  
+                    }  
+                }  
+            }  
+        }  
+    </script>  
+
+    <!-- Socket.IO and Chart.js -->  
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>  
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  
+</head>  
+
+<body class="bg-gray-900 text-white min-h-screen">  
+    <div class="container mx-auto px-4 py-8">  
+        <!-- Header -->  
+        <header class="mb-8">  
+            <h1 class="text-4xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-600">  
+                Cryptocurrency Dashboard  
+            </h1>  
+            <p class="text-center text-gray-400 mt-2">Real-time Market Insights</p>  
+        </header>  
+
+        <!-- Loading Indicator -->  
+        <div id="loadingIndicator" class="flex justify-center items-center space-x-4 my-8">  
+            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500"></div>  
+            <span class="text-gray-300">Loading cryptocurrency data...</span>  
+        </div>  
+
+        <!-- Crypto Table -->  
+        <div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden">  
+            <table id="cryptoTable" class="w-full" style="display:none;">  
+                <thead class="bg-gray-700">  
+                    <tr>  
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Name</th>  
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Symbol</th>  
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Price (USD)</th>  
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">24h Change</th>  
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Market Cap</th>  
+                    </tr>  
+                </thead>  
+                <tbody id="cryptoTableBody" class="divide-y divide-gray-700">  
+                    <!-- Dynamic data will be inserted here -->  
+                </tbody>  
+            </table>  
+        </div>  
+
+        <!-- Market Analysis Section -->  
+        <div class="mt-8 bg-gray-800 rounded-lg p-6 shadow-xl">
+            <h2 class="text-2xl font-semibold mb-4 text-blue-400">Market Analysis</h2>
+            <div id="analysisSection">
+                <table class="w-full">
+                    <thead class="bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Metric</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody id="analysisTableBody" class="divide-y divide-gray-700">
+                        </tbody>
+                </table>
+            </div>
+        </div>  
+
+        <!-- Quick Stats -->  
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">  
+            <div class="bg-gray-800 p-4 rounded-lg">  
+                <h3 class="text-lg font-medium text-blue-400">Total Market Cap</h3>  
+                <p id="totalMarketCap" class="text-2xl font-bold text-white">Loading...</p>  
+            </div>  
+            <div class="bg-gray-800 p-4 rounded-lg">  
+                <h3 class="text-lg font-medium text-blue-400">24h Volume</h3>  
+                <p id="totalVolume" class="text-2xl font-bold text-white">Loading...</p>  
+            </div>  
+            <div class="bg-gray-800 p-4 rounded-lg">  
+                <h3 class="text-lg font-medium text-blue-400">Trending Coins</h3>  
+                <ul id="trendingCoins" class="text-white">  
+                    <!-- Trending coins will be listed here -->  
+                </ul>  
+            </div>  
+        </div>  
+
+        <!-- Footer -->  
+        <footer class="mt-8 text-center">  
+            <a   
+                href="{{ sheets_url }}"   
+                target="_blank"   
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-300"  
+            >  
+                View Google Sheet  
+            </a>  
+        </footer>  
+    </div>  
+
+    <script>  
+        const socket = io();  
+        const cryptoTable = document.getElementById('cryptoTable');  
+        const cryptoTableBody = document.getElementById('cryptoTableBody');  
+        const loadingIndicator = document.getElementById('loadingIndicator');  
+        const analysisSection = document.getElementById('analysisSection');  
+        const totalMarketCap = document.getElementById('totalMarketCap');  
+        const totalVolume = document.getElementById('totalVolume');  
+        const trendingCoins = document.getElementById('trendingCoins');  
+
+        async function fetchInitialData() {  
+            try {  
+                const response = await fetch('/crypto-data');  
+                const result = await response.json();  
+                updateCryptoTable(result.data);  
+                updateAnalysis(result.analysis);  
+                updateQuickStats(result.data);  
+            } catch (error) {  
+                console.error('Error fetching initial crypto data:', error);  
+                loadingIndicator.innerHTML = `  
+                    <div class="text-red-500 flex items-center">  
+                        <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20">  
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />  
+                        </svg>  
+                        Error loading data. Please try again later.  
+                    </div>  
+                `;  
+            }  
+        }  
+
+        function updateCryptoTable(data) {  
+            cryptoTableBody.innerHTML = '';  
+        
+            if (!data || data.length === 0) {  
+                loadingIndicator.textContent = 'No cryptocurrency data available';  
+                return;  
+            }  
+        
+            data.forEach(coin => {  
+                const row = document.createElement('tr');  
+                row.className = 'hover:bg-gray-700 transition duration-200';  
+                row.innerHTML = `  
+                    <td class="px-4 py-3 whitespace-nowrap">  
+                        <div class="flex items-center">  
+                            <img src="${coin.image}" alt="${coin.name}" class="h-8 w-8 rounded-full mr-3">  
+                            <span class="font-medium">${coin.name}</span>  
+                        </div>  
+                    </td>  
+                    <td class="px-4 py-3 whitespace-nowrap">  
+                        <span class="text-gray-400 uppercase">${coin.symbol}</span>  
+                    </td>  
+                    <td class="px-4 py-3 whitespace-nowrap">  
+                        $${coin.current_price.toLocaleString()}  
+                    </td>  
+                    <td class="px-4 py-3 whitespace-nowrap">  
+                        <span class="${coin.price_change_percentage_24h > 0 ? 'text-green-500' : 'text-red-500'}">  
+                            ${coin.price_change_percentage_24h.toFixed(2)}%  
+                        </span>  
+                    </td>  
+                    <td class="px-4 py-3 whitespace-nowrap">  
+                        $${(coin.market_cap / 1000000).toLocaleString()} M  
+                    </td>  
+                `;  
+                cryptoTableBody.appendChild(row);  
+            });  
+        
+            loadingIndicator.style.display = 'none';  
+            cryptoTable.style.display = 'table';  
+        }
+
+        function updateQuickStats(data) {  
+            const marketCap = data.reduce((sum, coin) => sum + coin.market_cap, 0);  
+            const volume = data.reduce((sum, coin) => sum + coin.total_volume, 0);  
+
+            totalMarketCap.textContent = `$${(marketCap / 1000000000).toFixed(2)} B`;  
+            totalVolume.textContent = `$${(volume / 1000000).toFixed(2)} M`;  
+
+            // Update trending coins (top 3 by market cap)  
+            const topCoins = data  
+                .sort((a, b) => b.market_cap - a.market_cap)  
+                .slice(0, 3);  
+
+            trendingCoins.innerHTML = topCoins.map(coin => `  
+                <li class="flex items-center space-x-2 mb-1">  
+                    <img src="${coin.image}" alt="${coin.name}" class="h-5 w-5 rounded-full">  
+                    <span>${coin.name}</span>  
+                    <span class="${coin.price_change_percentage_24h > 0 ? 'text-green-500' : 'text-red-500'} text-sm">  
+                        ${coin.price_change_percentage_24h.toFixed(2)}%  
+                    </span>  
+                </li>  
+            `).join('');  
+        }  
+
+        function updateAnalysis(analysis) {  
+            const analysisTableBody = document.getElementById('analysisTableBody');  
+            analysisTableBody.innerHTML = ''; // Clear previous data  
+        
+            if (analysis) {  
+                for (const [key, value] of Object.entries(analysis)) {  
+                    const row = document.createElement('tr');  
+                    row.className = 'hover:bg-gray-700 transition duration-200';  
+        
+                    let valueHTML = '';  
+                    if (typeof value === 'object' && value !== null) {  
+                        // Handle nested objects like 24h, 7d, etc.
+                        valueHTML = Object.entries(value)
+                            .map(([subKey, subValue]) => `<div><strong>${subKey}:</strong> ${subValue}</div>`)
+                            .join('');
+                    } else {  
+                        valueHTML = value.toLocaleString();  
+                    }  
+        
+                    row.innerHTML = `  
+                        <td class="px-4 py-3 whitespace-nowrap">${key}</td>  
+                        <td class="px-4 py-3 whitespace-nowrap text-green-400">${valueHTML}</td>  
+                    `;  
+                    analysisTableBody.appendChild(row);  
+                }  
+            }  
+        }
+        
+        // Real-time updates via WebSocket  
+        socket.on('crypto_update', (data) => {  
+            updateCryptoTable(data.data);  
+            updateAnalysis(data.analysis);  
+            updateQuickStats(data.data);  
+        });  
+
+        // Initial data fetch  
+        fetchInitialData();  
+    </script>  
+</body>  
+</html>
